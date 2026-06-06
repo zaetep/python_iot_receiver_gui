@@ -7,7 +7,7 @@
 import sys
 import socket
 from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtWidgets import QApplication, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTextEdit, QPushButton, QGridLayout, QWidget, QLabel
 
 # Thread class to receive packets from the sensor
 class PacketReceiver(QThread):
@@ -38,13 +38,14 @@ class PacketReceiver(QThread):
                 client_sock, _ = sock.accept()
                 client_sock.settimeout(1.0)
 
-                # If opened, receive the data and close the socket once received
+                # If opened, receive any transmitted data
                 with client_sock:
                     while self.running:
                         try:
                             data = client_sock.recv(4096)
                             if not data:
                                 break
+                            # Emit received data from packet_received signal
                             self.packet_received.emit(data)
                         except socket.timeout:
                             continue
@@ -59,13 +60,34 @@ class PacketReceiver(QThread):
         self.running = False
         self.wait()
 
+class AlertsWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Alerts")
+
+        ### GUI Elements ###
+        self.buttonPressedLabel = QLabel("Button Pressed:")
+        self.lowTempWarningLabel = QLabel("Low Temperature:")
+        self.highTempWarningLabel = QLabel("High Temperature:")
+
+        ### Layout Init ###
+        layout = QGridLayout()
+        layout.addWidget(self.buttonPressedLabel, 0, 0)
+        layout.addWidget(self.lowTempWarningLabel, 1, 0)
+        layout.addWidget(self.highTempWarningLabel, 2, 0)
+
+        ### Widget Init ###
+        self.setLayout(layout)
+
 # Main GUI Window Setup
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
         # Set window title
-        self.setWindowTitle("Sensor Data Receiver")
+        self.setWindowTitle("Zaetep's Sensor Data Receiver")
+
+        ### GUI Elements ###
 
         # Initialize text area to be read only
         # TODO: Add separate areas for different kinds of received data
@@ -76,12 +98,18 @@ class MainWindow(QMainWindow):
         self.start_button = QPushButton("Start Receiver")
         self.stop_button = QPushButton("Stop Receiver")
         self.stop_button.setEnabled(False)
+        self.alerts_button = QPushButton("Alerts")
+        # self.liveview_button = QPushButton("Live Data")
+
+        ### Layout Init ###
 
         # Initialize layout
-        layout = QVBoxLayout()
-        layout.addWidget(self.text_area)
-        layout.addWidget(self.start_button)
-        layout.addWidget(self.stop_button)
+        layout = QGridLayout()
+        layout.addWidget(self.start_button, 0, 0, 1, 1)
+        layout.addWidget(self.stop_button, 1, 0, 1, 1)
+        layout.addWidget(self.alerts_button, 0, 1, 2, 1)
+
+        ### Widget Init ###
 
         # Initialize Widget container
         container = QWidget()
@@ -90,13 +118,18 @@ class MainWindow(QMainWindow):
         # Our container is the only Widget, so make it the main
         self.setCentralWidget(container)
 
-        # Initialize worker to be None
+        # Initialize vars
         self.worker = None
+        self.alerts_window = None
+
+        ### Connect Functionality ###
 
         # Connect start button to start receiver
         self.start_button.clicked.connect(self.start_receiver)
         # Connect stop button to stop receiver
         self.stop_button.clicked.connect(self.stop_receiver)
+        # Connect alerts button to open alerts window
+        self.alerts_button.clicked.connect(self.show_alerts_window)
 
     # Start receiver task
     def start_receiver(self):
@@ -121,6 +154,14 @@ class MainWindow(QMainWindow):
         # Re-enable start button and disable stop button
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
+
+    # Show alerts window
+    def show_alerts_window(self):
+        if self.alerts_window is None:
+            self.alerts_window = AlertsWindow()
+        self.alerts_window.show()
+        self.alerts_window.raise_()
+        self.alerts_window.activateWindow()
 
     # Display the received data in the text box
     # TODO: Parse an HTTP packet and add logic to display different types of alerts
